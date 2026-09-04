@@ -1,10 +1,15 @@
-const express = require('express');
-const app = express();
+const WebSocket = require('ws');
 
-app.get('/', (req, res) => {
-  res.send('Hello! This is my local website running on port 5173.');
+const ws = new WebSocket('ws://localhost:4000');
+
+ws.on('open', () => {
+  console.log('Connected to relay server!');
 });
 
-app.listen(5173, () => {
-  console.log('Local app running at http://localhost:5173');
+ws.on('message', async (message) => {
+  console.log('Relay asked me for something');
+  // Fetch from our real local app (Vite would be here in real life)
+  const response = await fetch('http://localhost:5173/');
+  const data = await response.text();
+  ws.send(data);
 });
