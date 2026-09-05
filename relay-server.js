@@ -2,8 +2,10 @@ const express = require('express');
 const WebSocket = require('ws');
 
 const app = express();
-const server = app.listen(4000, () => {
-  console.log('Relay server running at http://localhost:4000');
+const PORT = process.env.PORT || 4000;
+
+const server = app.listen(PORT, () => {
+  console.log(`Relay server running on port ${PORT}`);
 });
 
 const wss = new WebSocket.Server({ server });
