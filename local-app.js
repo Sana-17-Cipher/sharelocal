@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 
-const ws = new WebSocket('ws://localhost:4000');
+const ws = new WebSocket('wss://sharelocal-rspp.onrender.com');
 
 ws.on('open', () => {
   console.log('Connected to relay server!');
