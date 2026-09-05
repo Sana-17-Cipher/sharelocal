@@ -1,5 +1,6 @@
 const express = require('express');
 const WebSocket = require('ws');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -9,26 +10,40 @@ const server = app.listen(PORT, () => {
 });
 
 const wss = new WebSocket.Server({ server });
-let clientSocket = null;
+
+const clients = new Map();       // clientId -> socket
+const pendingRequests = new Map(); // requestId -> res object
 
 wss.on('connection', (ws) => {
-  console.log('A client (someone\'s laptop) connected!');
-  clientSocket = ws;
+  const clientId = crypto.randomBytes(4).toString('hex');
+  clients.set(clientId, ws);
+  console.log(`Client connected: ${clientId}`);
 
-  ws.on('message', (data) => {
-    if (res_waiting) {
-      res_waiting.send(data.toString());
-      res_waiting = null;
+  ws.send(JSON.stringify({ type: 'connected', clientId }));
+
+  ws.on('message', (raw) => {
+    const msg = JSON.parse(raw.toString());
+    const pending = pendingRequests.get(msg.requestId);
+    if (pending) {
+      pending.send(msg.body);
+      pendingRequests.delete(msg.requestId);
     }
+  });
+
+  ws.on('close', () => {
+    clients.delete(clientId);
+    console.log(`Client disconnected: ${clientId}`);
   });
 });
 
-let res_waiting = null;
-
-app.get('/', (req, res) => {
+app.get('/:clientId', (req, res) => {
+  const clientSocket = clients.get(req.params.clientId);
   if (!clientSocket) {
-    return res.status(502).send('No laptop connected.');
+    return res.status(502).send('No laptop connected with that ID.');
   }
-  res_waiting = res;
-  clientSocket.send('give me the page');
+
+  const requestId = crypto.randomBytes(4).toString('hex');
+  pendingRequests.set(requestId, res);
+
+  clientSocket.send(JSON.stringify({ type: 'request', requestId }));
 });
