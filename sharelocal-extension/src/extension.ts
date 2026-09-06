@@ -1,26 +1,51 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import WebSocket from 'ws';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+let ws: WebSocket | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
+	console.log('ShareLocal extension is now active!');
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "sharelocal-extension" is now active!');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('sharelocal-extension.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from sharelocal-extension!');
+	const disposable = vscode.commands.registerCommand('sharelocal-extension.share', () => {
+		startTunnel();
 	});
 
 	context.subscriptions.push(disposable);
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+function startTunnel() {
+	ws = new WebSocket('wss://sharelocal-rspp.onrender.com');
+
+	ws.on('open', () => {
+		vscode.window.showInformationMessage('Connected to ShareLocal relay, waiting for URL...');
+	});
+
+	ws.on('message', async (raw: Buffer) => {
+		const msg = JSON.parse(raw.toString());
+
+		if (msg.type === 'connected') {
+			const url = `https://sharelocal-rspp.onrender.com/${msg.clientId}`;
+			vscode.window.showInformationMessage(`ShareLocal is live: ${url}`);
+		}
+
+		if (msg.type === 'request') {
+			try {
+				const response = await fetch('http://localhost:5173/');
+				const data = await response.text();
+				ws!.send(JSON.stringify({ requestId: msg.requestId, body: data }));
+			} catch (err) {
+				console.error('Could not reach local server', err);
+			}
+		}
+	});
+
+	ws.on('close', () => {
+		vscode.window.showInformationMessage('ShareLocal tunnel closed.');
+	});
+}
+
+export function deactivate() {
+	if (ws) {
+		ws.close();
+	}
+}
