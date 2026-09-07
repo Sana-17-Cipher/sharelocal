@@ -41,23 +41,33 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const ws_1 = __importDefault(require("ws"));
 let ws;
+let lastUsedPort = '5173';
+let statusBarItem;
 function activate(context) {
     console.log('ShareLocal extension is now active!');
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    statusBarItem.text = '$(circle-outline) ShareLocal: Off';
+    statusBarItem.command = 'sharelocal-extension.share';
+    statusBarItem.show();
+    context.subscriptions.push(statusBarItem);
     const shareCommand = vscode.commands.registerCommand('sharelocal-extension.share', async () => {
         const port = await vscode.window.showInputBox({
             prompt: 'Which local port do you want to share?',
             placeHolder: '5173',
-            value: '5173'
+            value: lastUsedPort
         });
         if (!port) {
-            return; // user cancelled
+            return;
         }
+        lastUsedPort = port;
         startTunnel(port);
     });
     const stopCommand = vscode.commands.registerCommand('sharelocal-extension.stop', () => {
         if (ws) {
             ws.close();
             ws = undefined;
+            statusBarItem.text = '$(circle-outline) ShareLocal: Off';
+            statusBarItem.tooltip = undefined;
             vscode.window.showInformationMessage('ShareLocal stopped.');
         }
         else {
@@ -75,6 +85,8 @@ function startTunnel(port) {
         const msg = JSON.parse(raw.toString());
         if (msg.type === 'connected') {
             const url = `https://sharelocal-rspp.onrender.com/${msg.clientId}`;
+            statusBarItem.text = `$(radio-tower) ShareLocal: Live`;
+            statusBarItem.tooltip = url;
             vscode.window.showInformationMessage(`ShareLocal is live: ${url}`, 'Copy URL').then(selection => {
                 if (selection === 'Copy URL') {
                     vscode.env.clipboard.writeText(url);
@@ -101,6 +113,8 @@ function startTunnel(port) {
         }
     });
     ws.on('close', () => {
+        statusBarItem.text = '$(circle-outline) ShareLocal: Off';
+        statusBarItem.tooltip = undefined;
         vscode.window.showInformationMessage('ShareLocal tunnel closed.');
     });
 }
