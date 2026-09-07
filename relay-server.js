@@ -22,28 +22,32 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'connected', clientId }));
 
   ws.on('message', (raw) => {
-    const msg = JSON.parse(raw.toString());
-    const pending = pendingRequests.get(msg.requestId);
-    if (pending) {
-      pending.send(msg.body);
-      pendingRequests.delete(msg.requestId);
-    }
-  });
+	const msg = JSON.parse(raw.toString());
+	const pending = pendingRequests.get(msg.requestId);
+	if (pending) {
+		const buffer = Buffer.from(msg.body, 'base64');
+		pending.status(msg.status || 200);
+		pending.set('Content-Type', msg.contentType);
+		pending.send(buffer);
+		pendingRequests.delete(msg.requestId);
+	}
+});
 
   ws.on('close', () => {
     clients.delete(clientId);
     console.log(`Client disconnected: ${clientId}`);
   });
 });
+app.get('/:clientId/*', (req, res) => {
+	const clientSocket = clients.get(req.params.clientId);
+	if (!clientSocket) {
+		return res.status(502).send('No laptop connected with that ID.');
+	}
 
-app.get('/:clientId', (req, res) => {
-  const clientSocket = clients.get(req.params.clientId);
-  if (!clientSocket) {
-    return res.status(502).send('No laptop connected with that ID.');
-  }
+	const requestId = crypto.randomBytes(4).toString('hex');
+	pendingRequests.set(requestId, res);
 
-  const requestId = crypto.randomBytes(4).toString('hex');
-  pendingRequests.set(requestId, res);
+	const path = '/' + (req.params[0] || '');
 
-  clientSocket.send(JSON.stringify({ type: 'request', requestId }));
+	clientSocket.send(JSON.stringify({ type: 'request', requestId, path }));
 });

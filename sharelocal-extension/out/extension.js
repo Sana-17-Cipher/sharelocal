@@ -43,8 +43,16 @@ const ws_1 = __importDefault(require("ws"));
 let ws;
 function activate(context) {
     console.log('ShareLocal extension is now active!');
-    const shareCommand = vscode.commands.registerCommand('sharelocal-extension.share', () => {
-        startTunnel();
+    const shareCommand = vscode.commands.registerCommand('sharelocal-extension.share', async () => {
+        const port = await vscode.window.showInputBox({
+            prompt: 'Which local port do you want to share?',
+            placeHolder: '5173',
+            value: '5173'
+        });
+        if (!port) {
+            return; // user cancelled
+        }
+        startTunnel(port);
     });
     const stopCommand = vscode.commands.registerCommand('sharelocal-extension.stop', () => {
         if (ws) {
@@ -58,7 +66,7 @@ function activate(context) {
     });
     context.subscriptions.push(shareCommand, stopCommand);
 }
-function startTunnel() {
+function startTunnel(port) {
     ws = new ws_1.default('wss://sharelocal-rspp.onrender.com');
     ws.on('open', () => {
         vscode.window.showInformationMessage('Connected to ShareLocal relay, waiting for URL...');
@@ -76,9 +84,16 @@ function startTunnel() {
         }
         if (msg.type === 'request') {
             try {
-                const response = await fetch('http://localhost:5173/');
-                const data = await response.text();
-                ws.send(JSON.stringify({ requestId: msg.requestId, body: data }));
+                const response = await fetch(`http://localhost:${port}${msg.path}`);
+                const contentType = response.headers.get('content-type') || 'text/plain';
+                const arrayBuffer = await response.arrayBuffer();
+                const base64Body = Buffer.from(arrayBuffer).toString('base64');
+                ws.send(JSON.stringify({
+                    requestId: msg.requestId,
+                    status: response.status,
+                    contentType,
+                    body: base64Body
+                }));
             }
             catch (err) {
                 console.error('Could not reach local server', err);
