@@ -38,6 +38,18 @@ wss.on('connection', (ws) => {
     console.log(`Client disconnected: ${clientId}`);
   });
 });
+app.get('/:clientId', (req, res) => {
+	const clientSocket = clients.get(req.params.clientId);
+	if (!clientSocket) {
+		return res.status(502).send('No laptop connected with that ID.');
+	}
+
+	const requestId = crypto.randomBytes(4).toString('hex');
+	pendingRequests.set(requestId, res);
+
+	clientSocket.send(JSON.stringify({ type: 'request', requestId, path: '/' }));
+});
+
 app.get('/:clientId/*splat', (req, res) => {
 	const clientSocket = clients.get(req.params.clientId);
 	if (!clientSocket) {
