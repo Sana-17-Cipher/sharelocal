@@ -43,10 +43,20 @@ const ws_1 = __importDefault(require("ws"));
 let ws;
 function activate(context) {
     console.log('ShareLocal extension is now active!');
-    const disposable = vscode.commands.registerCommand('sharelocal-extension.share', () => {
+    const shareCommand = vscode.commands.registerCommand('sharelocal-extension.share', () => {
         startTunnel();
     });
-    context.subscriptions.push(disposable);
+    const stopCommand = vscode.commands.registerCommand('sharelocal-extension.stop', () => {
+        if (ws) {
+            ws.close();
+            ws = undefined;
+            vscode.window.showInformationMessage('ShareLocal stopped.');
+        }
+        else {
+            vscode.window.showInformationMessage('No active ShareLocal tunnel.');
+        }
+    });
+    context.subscriptions.push(shareCommand, stopCommand);
 }
 function startTunnel() {
     ws = new ws_1.default('wss://sharelocal-rspp.onrender.com');
@@ -57,7 +67,12 @@ function startTunnel() {
         const msg = JSON.parse(raw.toString());
         if (msg.type === 'connected') {
             const url = `https://sharelocal-rspp.onrender.com/${msg.clientId}`;
-            vscode.window.showInformationMessage(`ShareLocal is live: ${url}`);
+            vscode.window.showInformationMessage(`ShareLocal is live: ${url}`, 'Copy URL').then(selection => {
+                if (selection === 'Copy URL') {
+                    vscode.env.clipboard.writeText(url);
+                    vscode.window.showInformationMessage('URL copied to clipboard!');
+                }
+            });
         }
         if (msg.type === 'request') {
             try {

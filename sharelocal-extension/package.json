@@ -16,6 +16,10 @@
   {
     "command": "sharelocal-extension.share",
     "title": "ShareLocal: Share Local Server"
+  },
+  {
+    "command": "sharelocal-extension.stop",
+    "title": "ShareLocal: Stop Sharing"
   }
 ]
   },
