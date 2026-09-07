@@ -12,7 +12,9 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocket.Server({ server });
 
 const clients = new Map();         // clientId -> socket
-const pendingRequests = new Map(); // requestId -> { res, clientId }
+const pendingRequests = new Map(); // requestId -> { res, clientId, timeout }
+
+const REQUEST_TIMEOUT_MS = 15000; // 15 seconds
 
 wss.on('connection', (ws) => {
   const clientId = crypto.randomBytes(4).toString('hex');
@@ -25,6 +27,7 @@ wss.on('connection', (ws) => {
     const msg = JSON.parse(raw.toString());
     const pending = pendingRequests.get(msg.requestId);
     if (pending) {
+      clearTimeout(pending.timeout);
       let buffer = Buffer.from(msg.body, 'base64');
 
       if (msg.contentType && msg.contentType.includes('text/html')) {
@@ -55,6 +58,15 @@ app.get('/:clientId', (req, res) => {
   const requestId = crypto.randomBytes(4).toString('hex');
   pendingRequests.set(requestId, { res, clientId: req.params.clientId });
 
+  const timeout = setTimeout(() => {
+    if (pendingRequests.has(requestId)) {
+      pendingRequests.delete(requestId);
+      res.status(504).send('Local server took too long to respond.');
+    }
+  }, REQUEST_TIMEOUT_MS);
+
+  pendingRequests.get(requestId).timeout = timeout;
+
   clientSocket.send(JSON.stringify({ type: 'request', requestId, path: '/' }));
 });
 
@@ -66,6 +78,15 @@ app.get('/:clientId/*splat', (req, res) => {
 
   const requestId = crypto.randomBytes(4).toString('hex');
   pendingRequests.set(requestId, { res, clientId: req.params.clientId });
+
+  const timeout = setTimeout(() => {
+    if (pendingRequests.has(requestId)) {
+      pendingRequests.delete(requestId);
+      res.status(504).send('Local server took too long to respond.');
+    }
+  }, REQUEST_TIMEOUT_MS);
+
+  pendingRequests.get(requestId).timeout = timeout;
 
   const splatParts = req.params.splat || [];
   const path = '/' + splatParts.join('/');
